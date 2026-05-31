@@ -184,8 +184,6 @@ class Controller
 
             if ($createResult === true || $createResult === null) {
                 $onlyExistingUsers = $this->kirby->option('thathoff.oauth.onlyExistingUsers', false);
-                $defaultRole = $this->kirby->option('thathoff.oauth.defaultRole', 'admin');
-                $admins = $this->kirby->option('thathoff.oauth.adminWhitelist', []);
 
                 if ($onlyExistingUsers) {
                     $this->error("User missing and creating users is disabled!");
@@ -195,21 +193,15 @@ class Controller
                     $this->error("Access denied for $email.");
                 }
 
-                // Normalize values to be Case-Insensitive
-                $adminsNormalized = A::map($admins, fn($value) => Str::lower($value));
-                $emailNormalized = Str::lower($email);
-                $role = (!empty($admins) && A::has($adminsNormalized, $emailNormalized)) ? 'admin' : $defaultRole;
+                $role = $this->resolveRole($email, $oauthUserData);
 
-                // Create User
                 $kirbyUser = $this->kirby->impersonate('kirby', function () use ($name, $email, $role) {
                     $userData = [
-                        'name'      => $name,
-                        'email'     => $email,
-                        'role'      => $role,
+                        'name'  => $name,
+                        'email' => $email,
+                        'role'  => $role,
                     ];
 
-                    // The first user requires a password to be set
-                    // all other users can be created without a password
                     if ($this->kirby->users()->count() === 0) {
                         $userData['password'] = bin2hex(random_bytes(32));
                     }
@@ -223,6 +215,18 @@ class Controller
             if (!$kirbyUser) {
                 $this->error("User cannot be created.");
             }
+        } else {
+            $updateRoles = $this->kirby->option('thathoff.oauth.updateRoles', false);
+
+            if ($updateRoles) {
+                $resolvedRole = $this->resolveRole($email, $oauthUserData, fallbackRole: 'nobody');
+
+                if ($kirbyUser->role()->name() !== $resolvedRole) {
+                    $this->kirby->impersonate('kirby', function () use ($kirbyUser, $resolvedRole) {
+                        $kirbyUser->changeRole($resolvedRole);
+                    });
+                }
+            }
         }
 
         $this->kirby->trigger('thathoff.oauth.login:before', ['oauthUser' => $oauthUser, 'user' => $kirbyUser]);
@@ -230,6 +234,48 @@ class Controller
         $this->kirby->trigger('thathoff.oauth.login:after', ['oauthUser' => $oauthUser, 'user' => $kirbyUser,]);
 
         $this->goToPanel();
+    }
+
+    private function resolveRole(string $email, array $oauthUserData, ?string $fallbackRole = null): string
+    {
+        $defaultRole = $this->kirby->option('thathoff.oauth.defaultRole', 'admin');
+        $admins = $this->kirby->option('thathoff.oauth.adminWhitelist', []);
+        $groupRoles = $this->kirby->option('thathoff.oauth.groupRoles', []);
+
+        error_log("resolveRole called for $email");
+
+        if (!empty($admins)) {
+            $adminsNormalized = A::map($admins, fn($value) => Str::lower($value));
+            $emailNormalized = Str::lower($email);
+
+            if (A::has($adminsNormalized, $emailNormalized)) {
+                error_log("resolveRole → admin via adminWhitelist");
+                return 'admin';
+            }
+        }
+
+        if (!empty($groupRoles)) {
+            $groupsField = $this->kirby->option('thathoff.oauth.groupsField', 'groups');
+            $groups = $oauthUserData[$groupsField] ?? [];
+            error_log("resolveRole groups=" . json_encode($groups));
+
+            if (is_string($groups)) {
+                $groups = [$groups];
+            }
+
+            foreach ($groups as $group) {
+                error_log("resolveRole checking group=$group hit=" . (isset($groupRoles[$group]) ? 'yes' : 'no'));
+                if (isset($groupRoles[$group])) {
+                    error_log("resolveRole → " . $groupRoles[$group] . " via groupRoles");
+                    return $groupRoles[$group];
+                }
+            }
+        } else {
+            error_log("resolveRole groupRoles is empty");
+        }
+
+        error_log("resolveRole → fallback $defaultRole");
+        return $fallbackRole ?? $defaultRole;
     }
 
     private function checkWhiteLists(string $email): bool
