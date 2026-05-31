@@ -9,5 +9,8 @@ return [
     'onlyOauth' => null,
     'onlyExistingUsers' => null,
     'allowEveryone' => null,
-    'scope' => null
+    'scope' => null,
+    'groupRoles' => null,
+    'groupsField' => null,
+    'updateRoles' => null
 ];
