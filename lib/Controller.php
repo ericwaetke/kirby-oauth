@@ -242,14 +242,11 @@ class Controller
         $admins = $this->kirby->option('thathoff.oauth.adminWhitelist', []);
         $groupRoles = $this->kirby->option('thathoff.oauth.groupRoles', []);
 
-        error_log("resolveRole called for $email");
-
         if (!empty($admins)) {
             $adminsNormalized = A::map($admins, fn($value) => Str::lower($value));
             $emailNormalized = Str::lower($email);
 
             if (A::has($adminsNormalized, $emailNormalized)) {
-                error_log("resolveRole → admin via adminWhitelist");
                 return 'admin';
             }
         }
@@ -257,24 +254,19 @@ class Controller
         if (!empty($groupRoles)) {
             $groupsField = $this->kirby->option('thathoff.oauth.groupsField', 'groups');
             $groups = $oauthUserData[$groupsField] ?? [];
-            error_log("resolveRole groups=" . json_encode($groups));
 
             if (is_string($groups)) {
                 $groups = [$groups];
             }
 
             foreach ($groups as $group) {
-                error_log("resolveRole checking group=$group hit=" . (isset($groupRoles[$group]) ? 'yes' : 'no'));
                 if (isset($groupRoles[$group])) {
                     error_log("resolveRole → " . $groupRoles[$group] . " via groupRoles");
                     return $groupRoles[$group];
                 }
             }
-        } else {
-            error_log("resolveRole groupRoles is empty");
         }
 
-        error_log("resolveRole → fallback $defaultRole");
         return $fallbackRole ?? $defaultRole;
     }
 
