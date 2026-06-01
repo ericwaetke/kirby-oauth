@@ -259,10 +259,9 @@ class Controller
                 $groups = [$groups];
             }
 
-            foreach ($groups as $group) {
-                if (isset($groupRoles[$group])) {
-                    error_log("resolveRole → " . $groupRoles[$group] . " via groupRoles");
-                    return $groupRoles[$group];
+            foreach ($groupRoles as $group => $role) {
+                if (in_array($group, $groups)) {
+                    return $role;
                 }
             }
         }
