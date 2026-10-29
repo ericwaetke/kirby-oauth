@@ -4,7 +4,7 @@ namespace Thathoff\Oauth;
 
 use Kirby\Cms\App;
 use Kirby\Cms\User;
-use Kirby\Http\Uri;
+use Kirby\Cms\Url;
 use Kirby\Session\Session;
 use Kirby\Toolkit\A;
 use Kirby\Toolkit\Str;
@@ -34,7 +34,7 @@ class Controller
                     return [
                         'id'   => $provider->getId(),
                         'name' => $provider->getName(),
-                        'href' => new Uri('oauth/login') . '/' . $provider->getId(),
+                        'href' => Url::to('oauth/login/' . $provider->getId()),
                         'icon' => $provider->getIcon(),
                         'theme' => $provider->getTheme(),
                     ];
@@ -219,6 +219,9 @@ class Controller
         $this->goToPanel();
     }
 
+    /**
+     * @param array<string, mixed> $oauthUserData
+     */
     private function resolveRole(string $email, array $oauthUserData, ?string $fallbackRole = null): string
     {
         $defaultRole = $this->kirby->option('thathoff.oauth.defaultRole', 'admin');

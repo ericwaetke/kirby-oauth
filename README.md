@@ -6,7 +6,8 @@ This plugin is an plugin to provide [OAuth 2.0](http://oauth.net/2/) support for
 
 ## Kirby Compatibility
 
-- For **Kirby 4 and up** use version 3.0.0 or higher
+- For **Kirby 6 and up** use version 4.0.0 or higher
+- For **Kirby 4 and 5** use version 3.x
 - For **Kirby 3.6 - 3.9** use version 2 or higher
 - For **Kirby 3.0 - 3.6** use version 1 (not maintained anymore)
 
@@ -80,7 +81,22 @@ return [
     'autoRedirect' => false
 
     // Set this to 'true' to disable checking for the 'email_verified' field in the OAuth response. While some providers do not send this information, it is recommended that you keep this option enabled if your provider supports it.
-    'skipEmailVerifiedCheck' => false
+    'skipEmailVerifiedCheck' => false,
+
+    // Map OIDC groups claims to Kirby user roles. When set, a user's group memberships
+    // are checked against this map and the first match determines their role.
+    // Falls back to defaultRole if no group matches.
+    'groupRoles' => [
+        'editor'   => 'editor',
+        'reviewer' => 'reviewer',
+    ],
+
+    // The OIDC claim field that contains the user's group memberships.
+    'groupsField' => 'groups',
+
+    // When true, existing users' roles are updated on each login based on groupRoles
+    // or adminWhitelist. When false (default), the role is only set at user creation.
+    'updateRoles' => false
   ],
 ];
 ```
@@ -94,6 +110,22 @@ return [
 > ```
 >
 > See the `emailField` / `emailVerified` options in the provider configuration below.
+
+### Login Methods (Kirby 6)
+
+Kirby 6 controls which login methods are offered on the Panel login screen through the [`auth.methods` option](https://getkirby.com/docs/reference/system/options/auth.methods). This plugin registers itself as the `oauth` method and enables it automatically:
+
+- If you have not set `auth.methods` yourself, the plugin adds it for you: `['password' => [], 'oauth' => []]` — or just `['oauth' => []]` when `onlyOauth` is enabled (which hides the password form).
+- If you set `auth.methods` in your config, your setting always wins and the plugin stays out of the way. For example, to show OAuth first and control the order:
+
+```php
+'auth' => [
+  'methods' => [
+    'oauth'    => [],
+    'password' => [],
+  ],
+],
+```
 
 ### Provider Options
 
@@ -150,7 +182,36 @@ By default only whitelisted users are allowed to login into the Kirby panel.
 
 **Allow Everyone:** By setting `allowEveryone` to `true` all authenticated accounts are able to login. *Please use this option with care!* You probably want to change the default user role to a more restricted one then the default `admin`.
 
-**Default Role:** Newly created users get the role defined with `defaultRole` when they first login. The default is `admin`. Please note that when the user has ben created already the role will not be updated. You can set this role to `nobody` if you want to manually whitelist users by changing the role in the Kirby panel.
+**Default Role:** Newly created users get the role defined with `defaultRole` when they first login. The default is `admin`. Please note that when the user has ben created already the role will not be updated unless `updateRoles` is enabled (see below). You can set this role to `nobody` if you want to manually whitelist users by changing the role in the Kirby panel.
+
+**Group Roles:** You can map OIDC group claims to Kirby roles, so that users are automatically assigned a role based on their group membership.
+
+```php
+'thathoff.oauth' => [
+    'groupRoles' => [
+        'ldap_editor'   => 'editor',
+        'ldap_reviewer' => 'reviewer',
+        'ldap_admin'    => 'admin',
+    ],
+    // Field in the OIDC user data that contains group memberships
+    'groupsField' => 'groups',
+]
+```
+
+The role is determined in the following priority order:
+1. `adminWhitelist` — if the user's email is listed, they get `admin`
+2. `groupRoles` — if any of the user's groups matches a key in this map, they get the mapped role (first match wins)
+3. `defaultRole` — fallback if neither above applies
+
+The corresponding role blueprints must exist in `/site/blueprints/users/`. See the [Kirby user role docs](https://getkirby.com/docs/guide/users/roles) for details.
+
+**Update Roles:** By default a user's role is set only once at creation time. Set `updateRoles` to `true` to re-evaluate the role on every login and update it if group membership or whitelist status has changed:
+
+```php
+'thathoff.oauth' => [
+    'updateRoles' => true,
+]
+```
 
 **Only Existing User:** By setting `onlyExistingUsers` to true only created uses are able to login with an OAuth provider, no new users are created.
 
